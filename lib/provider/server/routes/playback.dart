@@ -30,11 +30,8 @@ final _deviceClients = Set.unmodifiable({
   YoutubeApiClient.safari,
 });
 
-String? get _randomUserAgent => _deviceClients
-    .elementAt(
-      Random().nextInt(_deviceClients.length),
-    )
-    .payload["context"]["client"]["userAgent"];
+String? get _randomUserAgent =>
+    "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
 
 class ServerPlaybackRoutes {
   final Ref ref;
