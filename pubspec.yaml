@@ -114,7 +114,10 @@ dependencies:
   wikipedia_api: ^0.1.0
   win32_registry: ^1.1.5
   window_manager: ^0.4.3
-  youtube_explode_dart: ^3.0.5
+  youtube_explode_dart:
+    git:
+      url: https://github.com/Hexer10/youtube_explode_dart.git
+      ref: master
   yt_dlp_dart:
     git:
       url: https://github.com/KRTirtho/yt_dlp_dart.git
