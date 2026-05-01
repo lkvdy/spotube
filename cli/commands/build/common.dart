@@ -37,7 +37,7 @@ mixin BuildCommandCommonSteps on Command {
     await dotEnvFile.create(recursive: true);
 
     await dotEnvFile.writeAsString(
-      "${CliEnv.dotenv}\n"
+      "${CliEnv.dotenv.isEmpty ? 'LASTFM_API_KEY=dummy\nLASTFM_API_SECRET=dummy' : CliEnv.dotenv}\n"
       "RELEASE_CHANNEL=${CliEnv.channel.name}\n",
     );
 
