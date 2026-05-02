@@ -1,4 +1,5 @@
 import 'dart:isolate';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -11,20 +12,21 @@ import 'dart:async';
 const _androidUA =
     'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
 
-const _youtubeCookies = String.fromEnvironment('YOUTUBE_COOKIES');
-
 class _RangeFixHttpClient extends YoutubeHttpClient {
+  String? cookies;
+  _RangeFixHttpClient({this.cookies});
+
   @override
   Map<String, String> get headers => {
         ...YoutubeHttpClient.defaultHeaders,
         'user-agent': _androidUA,
-        if (_youtubeCookies.isNotEmpty) 'cookie': _youtubeCookies,
+        if (cookies != null && cookies!.isNotEmpty) 'cookie': cookies!,
       };
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    if (_youtubeCookies.isNotEmpty) {
-      request.headers['cookie'] = _youtubeCookies;
+    if (cookies != null && cookies!.isNotEmpty) {
+      request.headers['cookie'] = cookies!;
     }
     if (request.url.host.contains('googlevideo.com')) {
       request.headers['user-agent'] = _androidUA;
@@ -69,7 +71,7 @@ class IsolatedYoutubeExplode {
 
   static bool get isInitialized => _instance != null;
 
-  static Future<void> initialize() async {
+  static Future<void> initialize([String? cookies]) async {
     if (_instance != null) {
       return;
     }
@@ -85,7 +87,10 @@ class IsolatedYoutubeExplode {
       }
     });
 
-    final isolate = await Isolate.spawn(_isolateEntry, receivePort.sendPort);
+    final isolate = await Isolate.spawn(
+      _isolateEntry,
+      [receivePort.sendPort, cookies],
+    );
 
     _instance = IsolatedYoutubeExplode._(
       isolate,
@@ -98,10 +103,13 @@ class IsolatedYoutubeExplode {
     }
   }
 
-  static Future<void> _isolateEntry(SendPort mainSendPort) async {
+  static Future<void> _isolateEntry(List<dynamic> params) async {
+    final SendPort mainSendPort = params[0];
+    final String? cookies = params[1];
     final receivePort = ReceivePort();
     // final solver = await DenoEJSSolver.init();
-    final youtubeExplode = YoutubeExplode(httpClient: _RangeFixHttpClient());
+    final youtubeExplode =
+        YoutubeExplode(httpClient: _RangeFixHttpClient(cookies: cookies));
     final stopWatch = kDebugMode ? Stopwatch() : null;
 
     /// Send the main port to the main isolate
@@ -197,9 +205,17 @@ class YouTubeExplodeEngine implements YouTubeEngine {
     return true;
   }
 
+  Future<void> _initialize() async {
+    if (IsolatedYoutubeExplode.isInitialized) return;
+    final prefs = await SharedPreferences.getInstance();
+    final cookies = prefs.getString("youtube_auth_cookies") ??
+        const String.fromEnvironment('YOUTUBE_COOKIES');
+    await IsolatedYoutubeExplode.initialize(cookies);
+  }
+
   @override
   Future<StreamManifest> getStreamManifest(String videoId) async {
-    await IsolatedYoutubeExplode.initialize();
+    await _initialize();
 
     final streamManifest = await _youtubeExplode.manifest(
       videoId,
@@ -238,13 +254,13 @@ class YouTubeExplodeEngine implements YouTubeEngine {
 
   @override
   Future<Video> getVideo(String videoId) async {
-    await IsolatedYoutubeExplode.initialize();
+    await _initialize();
     return _youtubeExplode.video(videoId);
   }
 
   @override
   Future<(Video, StreamManifest)> getVideoWithStreamInfo(String videoId) async {
-    await IsolatedYoutubeExplode.initialize();
+    await _initialize();
 
     final video = await getVideo(videoId);
     final streamManifest = await getStreamManifest(videoId);
@@ -254,7 +270,7 @@ class YouTubeExplodeEngine implements YouTubeEngine {
 
   @override
   Future<List<Video>> searchVideos(String query) async {
-    await IsolatedYoutubeExplode.initialize();
+    await _initialize();
 
     return _youtubeExplode
         .search(

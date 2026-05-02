@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shelf/shelf.dart';
 import 'package:spotube/models/metadata/metadata.dart';
 import 'package:spotube/models/parser/range_headers.dart';
@@ -99,6 +100,10 @@ class ServerPlaybackRoutes {
             .swapWithNextSibling()
             .then((track) => track.url!);
 
+    final prefs = await SharedPreferences.getInstance();
+    final youtubeCookies = prefs.getString("youtube_auth_cookies") ??
+        const String.fromEnvironment('YOUTUBE_COOKIES');
+
     final options = Options(
       headers: {
         "user-agent": _userAgent,
@@ -106,7 +111,7 @@ class ServerPlaybackRoutes {
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
         "Range": "bytes=0-0",
-        if (_youtubeCookies.isNotEmpty) "cookie": _youtubeCookies,
+        if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
       },
       validateStatus: (status) => status! < 400,
     );
@@ -171,6 +176,10 @@ class ServerPlaybackRoutes {
       }
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final youtubeCookies = prefs.getString("youtube_auth_cookies") ??
+        const String.fromEnvironment('YOUTUBE_COOKIES');
+
     final options = Options(
       headers: {
         ...headers,
@@ -179,7 +188,7 @@ class ServerPlaybackRoutes {
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
         "Range": fetchRange ?? "bytes=0-1048575",
-        if (_youtubeCookies.isNotEmpty) "cookie": _youtubeCookies,
+        if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
       },
       responseType: ResponseType.stream,
       validateStatus: (status) => status! < 400,

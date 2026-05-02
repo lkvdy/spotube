@@ -186,8 +186,19 @@ class MetadataPluginNotifier extends AsyncNotifier<MetadataPluginState> {
       final byteData = await rootBundle.load(
         "assets/plugins/$plugin/plugin.smplug",
       );
-      final pluginConfig =
+      var pluginConfig =
           await extractPluginArchive(byteData.buffer.asUint8List());
+
+      // Manually add authentication ability to youtube audio plugin
+      if (plugin == "spotube-plugin-youtube-audio") {
+        pluginConfig = pluginConfig.copyWith(
+          abilities: [
+            ...pluginConfig.abilities,
+            PluginAbilities.authentication,
+          ],
+        );
+      }
+
       try {
         await addPlugin(pluginConfig);
       } on MetadataPluginException catch (e) {

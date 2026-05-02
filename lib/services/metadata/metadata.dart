@@ -148,10 +148,11 @@ class MetadataPlugin {
       var metadataPlugin = Plugin()
       """);
 
-    return MetadataPlugin._(hetu);
+    return MetadataPlugin._(hetu, config.slug);
   }
 
   final Hetu hetu;
+  final String pluginSlug;
 
   late final MetadataAuthEndpoint auth;
 
@@ -165,8 +166,8 @@ class MetadataPlugin {
   late final MetadataPluginUserEndpoint user;
   late final MetadataPluginCore core;
 
-  MetadataPlugin._(this.hetu) {
-    auth = MetadataAuthEndpoint(hetu);
+  MetadataPlugin._(this.hetu, this.pluginSlug) {
+    auth = MetadataAuthEndpoint(hetu, pluginSlug);
 
     audioSource = MetadataPluginAudioSourceEndpoint(hetu);
     artist = MetadataPluginArtistEndpoint(hetu);
