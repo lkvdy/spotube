@@ -265,8 +265,14 @@ class SourcedTrack extends BasicSourcedTrack {
     for (final source in sources) {
       final res = await globalDio.head(
         source.url,
-        options:
-            Options(validateStatus: (status) => status != null && status < 500),
+        options: Options(
+          validateStatus: (status) => status != null && status < 500,
+          headers: {
+            "user-agent":
+                "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+            "Range": "bytes=0-0",
+          },
+        ),
       );
 
       stringBuffer.writeln(

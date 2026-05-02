@@ -151,6 +151,23 @@ class ServerPlaybackRoutes {
             .swapWithNextSibling()
             .then((track) => track.url!);
 
+    final playerRange = headers["range"] ?? headers["Range"];
+    String? fetchRange;
+
+    if (playerRange != null) {
+      final match = RegExp(r'bytes=(\d+)-(\d+)?').firstMatch(playerRange);
+      if (match != null) {
+        final start = int.parse(match.group(1)!);
+        final end =
+            match.group(2) != null ? int.parse(match.group(2)!) : null;
+        if (end == null || end - start > 1024 * 1024) {
+          fetchRange = 'bytes=$start-${start + 1024 * 1024 - 1}';
+        } else {
+          fetchRange = playerRange;
+        }
+      }
+    }
+
     final options = Options(
       headers: {
         ...headers,
@@ -158,8 +175,7 @@ class ServerPlaybackRoutes {
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
-        if (!headers.containsKey("range") && !headers.containsKey("Range"))
-          "Range": "bytes=0-",
+        "Range": fetchRange ?? "bytes=0-1048575",
       },
       responseType: ResponseType.stream,
       validateStatus: (status) => status! < 400,
