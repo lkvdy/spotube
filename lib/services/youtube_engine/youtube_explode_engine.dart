@@ -8,12 +8,36 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import 'dart:async';
 
+const _androidUA =
+    'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
+
 class _RangeFixHttpClient extends YoutubeHttpClient {
   @override
+  Map<String, String> get headers => {
+        ...YoutubeHttpClient.defaultHeaders,
+        'user-agent': _androidUA,
+      };
+
+  @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    if (request.url.host.contains('googlevideo.com') &&
-        request.method.toUpperCase() == 'HEAD') {
-      request.headers['Range'] = 'bytes=0-0';
+    if (request.url.host.contains('googlevideo.com')) {
+      request.headers['user-agent'] = _androidUA;
+      if (request.method.toUpperCase() == 'HEAD') {
+        request.headers['Range'] = 'bytes=0-0';
+      } else {
+        final range = request.headers['Range'] ?? request.headers['range'];
+        if (range != null) {
+          final match = RegExp(r'bytes=(\d+)-(\d+)').firstMatch(range);
+          if (match != null) {
+            final start = int.parse(match.group(1)!);
+            final end = int.parse(match.group(2)!);
+            if (end - start > 1024 * 1024) {
+              request.headers['Range'] =
+                  'bytes=$start-${start + 1024 * 1024 - 1}';
+            }
+          }
+        }
+      }
     }
     return super.send(request);
   }
