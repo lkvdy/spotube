@@ -112,6 +112,7 @@ class ServerPlaybackRoutes {
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
+        "Range": "bytes=0-",
       },
       validateStatus: (status) => status! < 400,
     );
@@ -166,6 +167,8 @@ class ServerPlaybackRoutes {
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
+        if (!headers.containsKey("range") && !headers.containsKey("Range"))
+          "Range": "bytes=0-",
       },
       responseType: ResponseType.stream,
       validateStatus: (status) => status! < 400,

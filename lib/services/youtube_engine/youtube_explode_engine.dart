@@ -1,11 +1,23 @@
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:spotube/services/youtube_engine/youtube_engine.dart';
 // import 'package:youtube_explode_dart/solvers.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import 'dart:async';
+
+class _RangeFixHttpClient extends YoutubeHttpClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.host.contains('googlevideo.com') &&
+        request.method.toUpperCase() == 'HEAD') {
+      request.headers['Range'] = 'bytes=0-0';
+    }
+    return super.send(request);
+  }
+}
 
 /// It contains methods that are computationally expensive
 class IsolatedYoutubeExplode {
@@ -59,7 +71,7 @@ class IsolatedYoutubeExplode {
   static Future<void> _isolateEntry(SendPort mainSendPort) async {
     final receivePort = ReceivePort();
     // final solver = await DenoEJSSolver.init();
-    final youtubeExplode = YoutubeExplode();
+    final youtubeExplode = YoutubeExplode(httpClient: _RangeFixHttpClient());
     final stopWatch = kDebugMode ? Stopwatch() : null;
 
     /// Send the main port to the main isolate
