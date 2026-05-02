@@ -24,6 +24,8 @@ import 'package:spotube/utils/service_utils.dart';
 const _userAgent =
     "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
 
+const _youtubeCookies = String.fromEnvironment('YOUTUBE_COOKIES');
+
 class ServerPlaybackRoutes {
   final Ref ref;
   UserPreferences get userPreferences => ref.read(userPreferencesProvider);
@@ -104,6 +106,7 @@ class ServerPlaybackRoutes {
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
         "Range": "bytes=0-0",
+        if (_youtubeCookies.isNotEmpty) "cookie": _youtubeCookies,
       },
       validateStatus: (status) => status! < 400,
     );
@@ -176,6 +179,7 @@ class ServerPlaybackRoutes {
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
         "Range": fetchRange ?? "bytes=0-1048575",
+        if (_youtubeCookies.isNotEmpty) "cookie": _youtubeCookies,
       },
       responseType: ResponseType.stream,
       validateStatus: (status) => status! < 400,

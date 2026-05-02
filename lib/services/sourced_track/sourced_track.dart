@@ -261,6 +261,7 @@ class SourcedTrack extends BasicSourcedTrack {
 
     List<SpotubeAudioSourceStreamObject> validStreams = [];
 
+    const youtubeCookies = String.fromEnvironment('YOUTUBE_COOKIES');
     final stringBuffer = StringBuffer();
     for (final source in sources) {
       final res = await globalDio.head(
@@ -271,6 +272,7 @@ class SourcedTrack extends BasicSourcedTrack {
             "user-agent":
                 "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
             "Range": "bytes=0-0",
+            if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
           },
         ),
       );

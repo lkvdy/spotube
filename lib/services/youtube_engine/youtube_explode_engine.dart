@@ -11,15 +11,21 @@ import 'dart:async';
 const _androidUA =
     'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
 
+const _youtubeCookies = String.fromEnvironment('YOUTUBE_COOKIES');
+
 class _RangeFixHttpClient extends YoutubeHttpClient {
   @override
   Map<String, String> get headers => {
         ...YoutubeHttpClient.defaultHeaders,
         'user-agent': _androidUA,
+        if (_youtubeCookies.isNotEmpty) 'cookie': _youtubeCookies,
       };
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (_youtubeCookies.isNotEmpty) {
+      request.headers['cookie'] = _youtubeCookies;
+    }
     if (request.url.host.contains('googlevideo.com')) {
       request.headers['user-agent'] = _androidUA;
       if (request.method.toUpperCase() == 'HEAD') {
