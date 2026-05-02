@@ -12,6 +12,9 @@ import 'dart:async';
 const _androidUA =
     'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip';
 
+const _browserUA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
+
 class _RangeFixHttpClient extends YoutubeHttpClient {
   String? cookies;
   _RangeFixHttpClient({this.cookies});
@@ -19,17 +22,24 @@ class _RangeFixHttpClient extends YoutubeHttpClient {
   @override
   Map<String, String> get headers => {
         ...YoutubeHttpClient.defaultHeaders,
-        'user-agent': _androidUA,
+        'user-agent': (cookies?.isNotEmpty ?? false) ? _browserUA : _androidUA,
         if (cookies != null && cookies!.isNotEmpty) 'cookie': cookies!,
+        if (cookies != null && cookies!.isNotEmpty)
+          'origin': 'https://www.youtube.com',
+        if (cookies != null && cookies!.isNotEmpty)
+          'referer': 'https://www.youtube.com/',
       };
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (cookies != null && cookies!.isNotEmpty) {
       request.headers['cookie'] = cookies!;
+      request.headers['origin'] = 'https://www.youtube.com';
+      request.headers['referer'] = 'https://www.youtube.com/';
     }
     if (request.url.host.contains('googlevideo.com')) {
-      request.headers['user-agent'] = _androidUA;
+      request.headers['user-agent'] =
+          (cookies?.isNotEmpty ?? false) ? _browserUA : _androidUA;
       if (request.method.toUpperCase() == 'HEAD') {
         request.headers['Range'] = 'bytes=0-0';
       } else {

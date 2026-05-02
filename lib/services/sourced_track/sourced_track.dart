@@ -273,10 +273,13 @@ class SourcedTrack extends BasicSourcedTrack {
         options: Options(
           validateStatus: (status) => status != null && status < 500,
           headers: {
-            "user-agent":
-                "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+            "user-agent": youtubeCookies.isNotEmpty
+                ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+                : "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
             "Range": "bytes=0-0",
             if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
+            if (youtubeCookies.isNotEmpty) "origin": "https://www.youtube.com",
+            if (youtubeCookies.isNotEmpty) "referer": "https://www.youtube.com/",
           },
         ),
       );

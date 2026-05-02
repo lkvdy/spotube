@@ -26,6 +26,9 @@ import 'package:spotube/extensions/dio.dart';
 const _userAgent =
     "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
 
+const _browserUserAgent =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36";
+
 const _youtubeCookies = String.fromEnvironment('YOUTUBE_COOKIES');
 
 class ServerPlaybackRoutes {
@@ -107,12 +110,14 @@ class ServerPlaybackRoutes {
 
     final options = Options(
       headers: {
-        "user-agent": _userAgent,
+        "user-agent": youtubeCookies.isNotEmpty ? _browserUserAgent : _userAgent,
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
         "Range": "bytes=0-0",
         if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
+        if (youtubeCookies.isNotEmpty) "origin": "https://www.youtube.com",
+        if (youtubeCookies.isNotEmpty) "referer": "https://www.youtube.com/",
       },
       validateStatus: (status) => status! < 400,
     );
@@ -184,12 +189,14 @@ class ServerPlaybackRoutes {
     final options = Options(
       headers: {
         ...headers,
-        "user-agent": _userAgent,
+        "user-agent": youtubeCookies.isNotEmpty ? _browserUserAgent : _userAgent,
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
         "Range": fetchRange ?? "bytes=0-1048575",
         if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
+        if (youtubeCookies.isNotEmpty) "origin": "https://www.youtube.com",
+        if (youtubeCookies.isNotEmpty) "referer": "https://www.youtube.com/",
       },
       responseType: ResponseType.stream,
       validateStatus: (status) => status! < 400,
@@ -230,63 +237,52 @@ class ServerPlaybackRoutes {
       "Headers: ${res.headers.map}",
     );
 
-    if (!userPreferences.cacheMusic) {
+    if (!userPreferences.cacheMusic ||
+        await trackCacheFile.exists() ||
+        !(fetchRange == null || fetchRange.startsWith("bytes=0-"))) {
       return res;
     }
 
-    final resStream = res.data!.stream.asBroadcastStream();
+    // Background download the full track for caching
+    // ignore: unawaited_futures
+    dio
+        .chunkDownload(
+      url,
+      trackCacheFile.path,
+      options: Options(
+        headers: {
+          "user-agent":
+              youtubeCookies.isNotEmpty ? _browserUserAgent : _userAgent,
+          if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
+          if (youtubeCookies.isNotEmpty) "origin": "https://www.youtube.com",
+          if (youtubeCookies.isNotEmpty) "referer": "https://www.youtube.com/",
+        },
+      ),
+    )
+        .then((_) async {
+      if (track.qualityPreset!.getFileExtension() == "weba") return;
 
-    final trackPartialCacheFile = File("${trackCacheFile.path}.part");
-    if (!await trackPartialCacheFile.exists()) {
-      await trackPartialCacheFile.create(recursive: true);
-    }
+      final imageBytes = await ServiceUtils.downloadImage(
+        track.query.album.images.asUrlString(
+          placeholder: ImagePlaceholder.albumArt,
+          index: 1,
+        ),
+      );
 
-    // Write the stream to the file based on the range
-    final partialCacheFileSink =
-        trackPartialCacheFile.openWrite(mode: FileMode.writeOnlyAppend);
-    final contentRange = res.headers.value("content-range") != null
-        ? ContentRangeHeader.parse(res.headers.value("content-range") ?? "")
-        : ContentRangeHeader(0, 0, 0);
+      final fileLength = await trackCacheFile.length();
+      await MetadataGod.writeMetadata(
+        file: trackCacheFile.path,
+        metadata: track.query.toMetadata(
+          imageBytes: imageBytes,
+          fileLength: fileLength,
+        ),
+      ).catchError((e, stackTrace) {
+        AppLogger.reportError(e, stackTrace);
+      });
+    }).catchError((e, stack) {
+      AppLogger.reportError(e, stack);
+    });
 
-    resStream.listen(
-      (data) {
-        partialCacheFileSink.add(data);
-      },
-      onError: (e, stack) {
-        partialCacheFileSink.close();
-      },
-      onDone: () async {
-        await partialCacheFileSink.close();
-
-        final fileLength = await trackPartialCacheFile.length();
-        if (fileLength != contentRange.total) return;
-
-        await trackPartialCacheFile.rename(trackCacheFile.path);
-
-        if (track.qualityPreset!.getFileExtension() == "weba") return;
-
-        final imageBytes = await ServiceUtils.downloadImage(
-          track.query.album.images.asUrlString(
-            placeholder: ImagePlaceholder.albumArt,
-            index: 1,
-          ),
-        );
-
-        await MetadataGod.writeMetadata(
-          file: trackCacheFile.path,
-          metadata: track.query.toMetadata(
-            imageBytes: imageBytes,
-            fileLength: fileLength,
-          ),
-        ).catchError((e, stackTrace) {
-          AppLogger.reportError(e, stackTrace);
-        });
-      },
-      cancelOnError: true,
-    );
-
-    res.data?.stream =
-        resStream; // To avoid Stream has been already listened to exception
     return res;
   }
 
