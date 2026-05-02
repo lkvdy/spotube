@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:dio/dio.dart' hide Response;
 import 'package:dio/dio.dart' as dio_lib;
@@ -21,16 +20,8 @@ import 'package:spotube/services/audio_player/audio_player.dart';
 import 'package:spotube/services/logger/logger.dart';
 import 'package:spotube/services/sourced_track/sourced_track.dart';
 import 'package:spotube/utils/service_utils.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-final _deviceClients = Set.unmodifiable({
-  YoutubeApiClient.ios,
-  YoutubeApiClient.android,
-  YoutubeApiClient.mweb,
-  YoutubeApiClient.safari,
-});
-
-String? get _randomUserAgent =>
+const _userAgent =
     "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
 
 class ServerPlaybackRoutes {
@@ -108,11 +99,11 @@ class ServerPlaybackRoutes {
 
     final options = Options(
       headers: {
-        "user-agent": _randomUserAgent,
+        "user-agent": _userAgent,
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
-        "Range": "bytes=0-",
+        "Range": "bytes=0-0",
       },
       validateStatus: (status) => status! < 400,
     );
@@ -163,7 +154,7 @@ class ServerPlaybackRoutes {
     final options = Options(
       headers: {
         ...headers,
-        "user-agent": _randomUserAgent,
+        "user-agent": _userAgent,
         "Cache-Control": "max-age=3600",
         "Connection": "keep-alive",
         "host": Uri.parse(url).host,
@@ -174,12 +165,10 @@ class ServerPlaybackRoutes {
       validateStatus: (status) => status! < 400,
     );
 
-    final contentLengthRes = await Future<dio_lib.Response?>.value(
-      dio.head(
-        url,
-        options: options.copyWith(responseType: ResponseType.bytes),
-      ),
-    ).catchError((e, stack) async {
+    dio_lib.Response<ResponseBody> res;
+    try {
+      res = await dio.get<ResponseBody>(url, options: options);
+    } catch (e, stack) {
       AppLogger.reportError(e, stack);
 
       final sourcedTrack = await ref
@@ -187,12 +176,11 @@ class ServerPlaybackRoutes {
           .refreshStreamingUrl();
 
       url = sourcedTrack.url!;
-
-      return dio.head(url, options: options);
-    });
+      res = await dio.get<ResponseBody>(url, options: options);
+    }
 
     // Redirect to m3u8 link directly as it handles range requests internally
-    if (contentLengthRes?.headers.value("content-type") ==
+    if (res.headers.value("content-type") ==
         "application/vnd.apple.mpegurl") {
       return dio_lib.Response<Uint8List>(
         statusCode: 301,
@@ -205,8 +193,6 @@ class ServerPlaybackRoutes {
         isRedirect: true,
       );
     }
-
-    final res = await dio.get<ResponseBody>(url, options: options);
 
     AppLogger.log.i(
       "Response for track: ${track.query.name}\n"
