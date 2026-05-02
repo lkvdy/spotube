@@ -13,6 +13,7 @@ import 'package:spotube/provider/metadata_plugin/metadata_plugin_provider.dart';
 import 'package:spotube/services/dio/dio.dart';
 import 'package:spotube/services/logger/logger.dart';
 import 'package:spotube/services/metadata/errors/exceptions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:spotube/services/sourced_track/exceptions.dart';
 import 'package:spotube/utils/service_utils.dart';
@@ -261,7 +262,10 @@ class SourcedTrack extends BasicSourcedTrack {
 
     List<SpotubeAudioSourceStreamObject> validStreams = [];
 
-    const youtubeCookies = String.fromEnvironment('YOUTUBE_COOKIES');
+    final prefs = await SharedPreferences.getInstance();
+    final youtubeCookies = prefs.getString("youtube_auth_cookies") ??
+        const String.fromEnvironment('YOUTUBE_COOKIES');
+
     final stringBuffer = StringBuffer();
     for (final source in sources) {
       final res = await globalDio.head(
