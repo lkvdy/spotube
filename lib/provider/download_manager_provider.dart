@@ -214,10 +214,21 @@ class DownloadManagerNotifier extends Notifier<List<DownloadTask>> {
         }
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final youtubeCookies = prefs.getString("youtube_auth_cookies") ??
+          const String.fromEnvironment('YOUTUBE_COOKIES');
+
       final response = await dio.chunkDownload(
         url,
         savePath,
         cancelToken: task.cancelToken,
+        options: Options(
+          headers: {
+            "user-agent":
+                "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+            if (youtubeCookies.isNotEmpty) "cookie": youtubeCookies,
+          },
+        ),
         onReceiveProgress: (count, total) {
           if (task.totalSizeBytes == null) {
             state = state.map((e) {

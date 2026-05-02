@@ -29,6 +29,7 @@ extension ChunkDownloaderDioExtension on Dio {
     if (await tempSaveDir.exists()) await tempSaveDir.delete(recursive: true);
     await tempSaveDir.create(recursive: true);
 
+    final maxChunkSize = 1024 * 1024; // 1MB for reliability
     try {
       int? totalLength;
       bool supportsRange = false;
@@ -38,8 +39,11 @@ extension ChunkDownloaderDioExtension on Dio {
         headResp = await head(
           urlPath,
           queryParameters: queryParameters,
-          options: Options(
-            headers: {'Range': 'bytes=0-0'},
+          options: (options ?? Options()).copyWith(
+            headers: {
+              ...(options?.headers ?? {}),
+              'Range': 'bytes=0-0',
+            },
             followRedirects: true,
           ),
         );
@@ -61,7 +65,7 @@ extension ChunkDownloaderDioExtension on Dio {
       if (totalLength == null || totalLength <= 1) {
         final resp = await get<ResponseBody>(
           urlPath,
-          options: Options(
+          options: (options ?? Options()).copyWith(
             responseType: ResponseType.stream,
           ),
           queryParameters: queryParameters,
@@ -89,7 +93,7 @@ extension ChunkDownloaderDioExtension on Dio {
                 'bytes';
       }
 
-      if (!supportsRange || connections <= 1) {
+      if (!supportsRange) {
         return download(
           urlPath,
           savePath,
@@ -102,60 +106,53 @@ extension ChunkDownloaderDioExtension on Dio {
         );
       }
 
-      final chunkSize = (totalLength / connections).ceil();
       int downloaded = 0;
+      final targetSink = targetFile.openWrite(mode: fileAccessMode);
 
-      final partFiles = List.generate(
-        connections,
-        (i) => File(join(tempSaveDir.path, 'part_$i')),
-      );
+      while (downloaded < totalLength) {
+        final start = downloaded;
+        final end = (start + maxChunkSize - 1).clamp(0, totalLength - 1);
 
-      final futures = List.generate(connections, (i) async {
-        final start = i * chunkSize;
-        final end = (i + 1) * chunkSize - 1;
-        if (start >= totalLength!) return;
+        bool success = false;
+        int retries = 0;
+        while (!success && retries < 3) {
+          try {
+            final resp = await get<ResponseBody>(
+              urlPath,
+              options: (options ?? Options()).copyWith(
+                responseType: ResponseType.stream,
+                headers: {
+                  ...(options?.headers ?? {}),
+                  'Range': 'bytes=$start-$end',
+                },
+              ),
+              queryParameters: queryParameters,
+              cancelToken: cancelToken,
+            );
 
-        final resp = await get<ResponseBody>(
-          urlPath,
-          options: Options(
-            responseType: ResponseType.stream,
-            headers: {'Range': 'bytes=$start-$end'},
-          ),
-          queryParameters: queryParameters,
-          cancelToken: cancelToken,
-        );
-
-        final file = partFiles[i];
-        if (await file.exists()) await file.delete();
-        await file.create(recursive: true);
-        final sink = file.openWrite();
-
-        await for (final chunk in resp.data!.stream) {
-          sink.add(chunk);
-          downloaded += chunk.length;
-          onReceiveProgress?.call(downloaded, totalLength);
+            await for (final chunk in resp.data!.stream) {
+              targetSink.add(chunk);
+              downloaded += chunk.length;
+              onReceiveProgress?.call(downloaded, totalLength);
+            }
+            success = true;
+          } catch (e) {
+            retries++;
+            if (retries >= 3) rethrow;
+            await Future.delayed(Duration(seconds: retries));
+          }
         }
-
-        await sink.close();
-      });
-
-      await Future.wait(futures);
-
-      final targetSink = targetFile.openWrite();
-      for (final f in partFiles) {
-        await targetSink.addStream(f.openRead());
       }
+
       await targetSink.close();
-
-      await tempSaveDir.delete(recursive: true);
-
       return Response(
         requestOptions: RequestOptions(path: urlPath),
         data: targetFile,
         statusCode: 200,
-        statusMessage: 'Chunked download completed ($connections connections)',
+        statusMessage: 'Robust chunked download completed',
       );
     } catch (e) {
+
       if (deleteOnError) {
         if (await targetFile.exists()) await targetFile.delete();
         if (await tempSaveDir.exists()) {

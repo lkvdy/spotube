@@ -21,6 +21,7 @@ import 'package:spotube/services/audio_player/audio_player.dart';
 import 'package:spotube/services/logger/logger.dart';
 import 'package:spotube/services/sourced_track/sourced_track.dart';
 import 'package:spotube/utils/service_utils.dart';
+import 'package:spotube/extensions/dio.dart';
 
 const _userAgent =
     "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
@@ -134,22 +135,22 @@ class ServerPlaybackRoutes {
     final trackCacheFile = File(await _getTrackCacheFilePath(track));
 
     if (await trackCacheFile.exists() && userPreferences.cacheMusic) {
-      final bytes = await trackCacheFile.readAsBytes();
-      final cachedFileLength = bytes.length;
+      final fileLength = await trackCacheFile.length();
 
-      return dio_lib.Response<Uint8List>(
+      return dio_lib.Response<dio_lib.ResponseBody>(
         statusCode: 200,
         headers: Headers.fromMap({
           "content-type": ["audio/${track.qualityPreset!.name}"],
-          "content-length": ["${cachedFileLength - 1}"],
+          "content-length": ["$fileLength"],
           "accept-ranges": ["bytes"],
-          "content-range": [
-            "bytes 0-${cachedFileLength - 1}/$cachedFileLength"
-          ],
+          "content-range": ["bytes 0-${fileLength - 1}/$fileLength"],
           "connection": ["close"],
         }),
         requestOptions: RequestOptions(path: request.requestedUri.toString()),
-        data: bytes,
+        data: dio_lib.ResponseBody(
+          trackCacheFile.openRead().cast<Uint8List>(),
+          200,
+        ),
       );
     }
 
